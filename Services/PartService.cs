@@ -1,65 +1,43 @@
-﻿using AviaPartsAPI.Models;
+﻿using AviaPartsAPI.Data;
+using AviaPartsAPI.Models;
 using AviaPartsAPI.Models.DTOs;
-using System.Linq;
+using Microsoft.EntityFrameworkCore;
 
 namespace AviaPartsAPI.Services
 {
     public class PartService : IPartService
     {
-        private readonly List<Part> _parts;
+        private readonly AppDbContext _context;
+        private readonly ILogger<PartService> _logger;
 
-        private int _nextId = 1;
-
-        public PartService()
+        public PartService(AppDbContext context, ILogger<PartService> logger)
         {
-            _parts = new List<Part>();
-
-            SeedTestData();
+            _context = context;
+            _logger = logger;
         }
-        private void SeedTestData()
+
+        public async Task<IEnumerable<PartResponseDto>> GetAllPartsAsync()
         {
-            CreatePart(new CreatePartDto
-            {
-                Name = "Турбина",
-                Description = "Турбина высокого давления",
-                SerialNumber = "TUR-001001",
-                InitialQuantity = 15,
-                MinimumStockLevel = 5,
-                StorageLocation = "A-01"
-            });
-            CreatePart(new CreatePartDto
-            {
-                Name = "Лонжерон",
-                Description = "Основной силовой элемент крыла",
-                SerialNumber = "LON-002002",
-                InitialQuantity = 3,
-                MinimumStockLevel = 10,
-                StorageLocation = "B-05"
-            });
-        }
-        public IEnumerable<PartResponseDto> GetAllParts()
-        {
-            return _parts
+            var parts = await _context.Parts
                 .Where(p => p.IsActive)
-                .Select(p => MapToDto(p))
-                .ToList();
+                .OrderBy(p => p.Id)
+                .ToListAsync();
+
+            return parts.Select(MapToDto);
         }
-        public PartResponseDto? GetPartById(int id)
+
+        public async Task<PartResponseDto?> GetPartByIdAsync(int id)
         {
+            var part = await _context.Parts
+                .FirstOrDefaultAsync(p => p.Id == id && p.IsActive);
 
-            var part = _parts.FirstOrDefault(p => p.Id == id && p.IsActive);
-
-
-            if (part == null)
-                return null;
-
-            return MapToDto(part);
+            return part == null ? null : MapToDto(part);
         }
-        public PartResponseDto CreatePart(CreatePartDto dto)
+
+        public async Task<PartResponseDto> CreatePartAsync(CreatePartDto dto)
         {
             var part = new Part
             {
-                Id = _nextId++,
                 Name = dto.Name,
                 Description = dto.Description,
                 SerialNumber = dto.SerialNumber,
@@ -71,62 +49,60 @@ namespace AviaPartsAPI.Services
                 IsActive = true,
                 Status = CalculateStatus(dto.InitialQuantity, dto.MinimumStockLevel)
             };
-            _parts.Add(part);
+
+            _context.Parts.Add(part);
+            await _context.SaveChangesAsync();
 
             return MapToDto(part);
         }
-        public PartResponseDto? UpdatePart(int id, UpdatePartDto dto)
+
+        public async Task<PartResponseDto?> UpdatePartAsync(int id, UpdatePartDto dto)
         {
-            var part = _parts.FirstOrDefault(p => p.Id == id && p.IsActive);
+            var part = await _context.Parts
+                .FirstOrDefaultAsync(p => p.Id == id && p.IsActive);
 
-            if (part == null)
-                return null;
+            if (part == null) return null;
 
-
-            if (dto.Name != null)
-                part.Name = dto.Name;
-
-            if (dto.Description != null)
-                part.Description = dto.Description;
-
-            if (dto.StorageLocation != null)
-                part.StorageLocation = dto.StorageLocation;
-
-            if (dto.MinimumStockLevel.HasValue)
-                part.MinimumStockLevel = dto.MinimumStockLevel.Value;
-
-            if (dto.ReorderQuantity.HasValue)
-                part.ReorderQuantity = dto.ReorderQuantity.Value;
+            if (dto.Name != null) part.Name = dto.Name;
+            if (dto.Description != null) part.Description = dto.Description;
+            if (dto.StorageLocation != null) part.StorageLocation = dto.StorageLocation;
+            if (dto.MinimumStockLevel.HasValue) part.MinimumStockLevel = dto.MinimumStockLevel.Value;
+            if (dto.ReorderQuantity.HasValue) part.ReorderQuantity = dto.ReorderQuantity.Value;
 
             part.LastUpdatedAt = DateTime.UtcNow;
-
             part.Status = CalculateStatus(part.StockQuantity, part.MinimumStockLevel);
 
+            await _context.SaveChangesAsync();
             return MapToDto(part);
         }
-        public bool DeletePart(int id)
-        {
-            var part = _parts.FirstOrDefault(p => p.Id == id && p.IsActive);
 
-            if (part == null)
-                return false;
+        public async Task<bool> DeletePartAsync(int id)
+        {
+            var part = await _context.Parts
+                .FirstOrDefaultAsync(p => p.Id == id && p.IsActive);
+
+            if (part == null) return false;
 
             part.IsActive = false;
             part.LastUpdatedAt = DateTime.UtcNow;
 
+            await _context.SaveChangesAsync();
             return true;
         }
-        public IEnumerable<PartResponseDto> GetLowStockParts()
+
+        public async Task<IEnumerable<PartResponseDto>> GetLowStockPartsAsync()
         {
-            return _parts
+            var parts = await _context.Parts
                 .Where(p => p.IsActive
-                           && p.StockQuantity <= p.MinimumStockLevel
-                           && p.Status != PartStatus.OutOfStock)
+                    && p.StockQuantity <= p.MinimumStockLevel
+                    && p.Status != PartStatus.OutOfStock)
                 .OrderBy(p => p.StockQuantity)
                 .ThenByDescending(p => p.LastUpdatedAt ?? DateTime.MinValue)
-                .Select(p => MapToDto(p))
-                .ToList();
+                .ToListAsync();
+
+            return parts.Select(MapToDto);
         }
+
         private PartResponseDto MapToDto(Part part)
         {
             return new PartResponseDto
@@ -141,15 +117,14 @@ namespace AviaPartsAPI.Services
                 Status = part.Status,
                 CreatedAt = part.CreatedAt,
                 SupplierId = part.SupplierId,
-                CategoryId = part.CategoryId,
+                CategoryId = part.CategoryId
             };
         }
+
         private PartStatus CalculateStatus(int stockQuantity, int minimumStockLevel)
         {
-            if (stockQuantity == 0)
-                return PartStatus.OutOfStock;
-            if (stockQuantity <= minimumStockLevel)
-                return PartStatus.LowStock;
+            if (stockQuantity == 0) return PartStatus.OutOfStock;
+            if (stockQuantity <= minimumStockLevel) return PartStatus.LowStock;
             return PartStatus.InStock;
         }
     }

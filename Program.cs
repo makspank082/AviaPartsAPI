@@ -1,5 +1,8 @@
+using AviaPartsAPI.Data;
 using AviaPartsAPI.Services;
-using Microsoft.OpenApi.Models; 
+using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+
 namespace AviaPartsAPI
 {
     public class Program
@@ -7,6 +10,10 @@ namespace AviaPartsAPI
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
+
+            // Добавьте эту строку для PostgreSQL!
+            builder.Services.AddDbContext<AppDbContext>(options =>
+                options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
             builder.Services.AddControllers();
             builder.Services.AddScoped<IPartService, PartService>();
