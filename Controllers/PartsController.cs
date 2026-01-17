@@ -2,6 +2,7 @@
 using AviaPartsAPI.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
+
 namespace AviaPartsAPI.Controllers
 {
     [Route("api/[controller]")]
@@ -35,7 +36,7 @@ namespace AviaPartsAPI.Controllers
 
             if (part == null)
             {
-                return NotFound($"Деталь с ID {id} не найдена");
+                throw new KeyNotFoundException($"Part with id {id} not found.");
             }
 
             return Ok(part);
@@ -60,16 +61,15 @@ namespace AviaPartsAPI.Controllers
             return Ok(lowStockParts);
         }
 
-
         // POST: api/parts
         [HttpPost]
         public async Task<IActionResult> CreatePart(
-            [FromBody] CreatePartDto dto,  
+            [FromBody] CreatePartDto dto,
             CancellationToken cancellationToken)
         {
             if (!ModelState.IsValid)
             {
-                return BadRequest(ModelState);
+                throw new ArgumentException("Invalid part data");
             }
 
             var createdPart = await _commandService.CreatePartAsync(dto, cancellationToken);
@@ -85,12 +85,18 @@ namespace AviaPartsAPI.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdatePart(
             int id,
-            [FromBody] UpdatePartDto dto, 
+            [FromBody] UpdatePartDto dto,
             CancellationToken cancellationToken)
         {
             if (!ModelState.IsValid)
             {
-                return BadRequest(ModelState);
+                throw new ArgumentException("Invalid update data");
+            }
+
+            var existingPart = await _queryService.GetPartByIdAsync(id, cancellationToken);
+            if (existingPart == null)
+            {
+                throw new KeyNotFoundException($"Part with id {id} not found.");
             }
 
             await _commandService.UpdatePartAsync(id, dto, cancellationToken);
@@ -101,10 +107,17 @@ namespace AviaPartsAPI.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeletePart(int id, CancellationToken cancellationToken)
         {
+            var existingPart = await _queryService.GetPartByIdAsync(id, cancellationToken);
+            if (existingPart == null)
+            {
+                throw new KeyNotFoundException($"Part with id {id} not found.");
+            }
+
             await _commandService.DeletePartAsync(id, cancellationToken);
             return NoContent();
         }
 
+        // PATCH: api/parts/{id}/stock
         [HttpPatch("{id}/stock")]
         public async Task<IActionResult> UpdateStock(
             int id,
@@ -112,11 +125,15 @@ namespace AviaPartsAPI.Controllers
             CancellationToken cancellationToken)
         {
             if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            {
+                throw new ArgumentException("Invalid stock operation data");
+            }
 
             var part = await _queryService.GetPartByIdAsync(id, cancellationToken);
             if (part == null)
-                return NotFound($"Деталь с ID {id} не найдена");
+            {
+                throw new KeyNotFoundException($"Part with id {id} not found.");
+            }
 
             try
             {
@@ -125,8 +142,14 @@ namespace AviaPartsAPI.Controllers
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(ex.Message);
+                throw new ArgumentException(ex.Message);
             }
+        }
+
+        [HttpGet("test-exception")]
+        public IActionResult TestException()
+        {
+            throw new KeyNotFoundException("Test exception from middleware");
         }
     }
 }
