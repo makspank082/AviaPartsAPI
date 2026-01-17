@@ -1,5 +1,4 @@
 using AviaPartsAPI.Data;
-using AviaPartsAPI.Services;
 using AviaPartsAPI.Services.Commands;
 using AviaPartsAPI.Services.Interfaces;
 using AviaPartsAPI.Services.Queries;
@@ -7,7 +6,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using AviaPartsAPI.Services.HealthChecks; 
+using AviaPartsAPI.Services.HealthChecks;
+using AviaPartsAPI.Middleware; 
 
 namespace AviaPartsAPI
 {
@@ -45,6 +45,8 @@ namespace AviaPartsAPI
             });
 
             var app = builder.Build();
+
+            app.UseMiddleware<ExceptionHandlingMiddleware>();
 
             if (app.Environment.IsDevelopment())
             {
