@@ -12,6 +12,7 @@ Production-ready REST API для управления складом запча�
 - **Monitoring:** Custom Health Checks
 
 ## Структура проекта
+```text
 AviaPartsAPI/
 ├── Commands/ # Command handlers (CQRS)
 ├── Queries/ # Query handlers (CQRS)
@@ -24,7 +25,7 @@ AviaPartsAPI/
 ├── Dockerfile # Container configuration
 ├── docker-compose.yml # Multi-container setup
 └── README.md # This file
-
+```
 ## Архитектурные решения
 
 ### CQRS Pattern
